@@ -8,6 +8,11 @@ return [
     'enabled' => env('ACTIVITY_LOGGER_ENABLED', true),
 
     /*
+     * If set to true, empty properties will not be logged.
+     */
+    'skip_empty' => true,
+
+    /*
      * When the clean-command is executed, all recording activities older than
      * the number of days specified here will be deleted.
      */
