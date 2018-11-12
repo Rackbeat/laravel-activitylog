@@ -33,6 +33,9 @@ class ActivityLogger
     /** @var \Spatie\Activitylog\ActivityLogStatus */
     protected $logStatus;
 
+	/** @var bool */
+	protected $skipEmpty;
+
     public function __construct(AuthManager $auth, Repository $config, ActivityLogStatus $logStatus)
     {
         $this->auth = $auth;
@@ -50,6 +53,8 @@ class ActivityLogger
         $this->logName = $config['activitylog']['default_log_name'];
 
         $this->logEnabled = $config['activitylog']['enabled'] ?? true;
+
+		$this->skipEmpty = $config['activitylog']['skip_empty'] ?? true;
 
         $this->logStatus = $logStatus;
     }
