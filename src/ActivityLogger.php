@@ -136,6 +136,10 @@ class ActivityLogger
         if ($this->logStatus->disabled()) {
             return;
         }
+        
+        if ( $this->skipEmpty && ( empty( $this->properties->get( 'attributes' ) ) || empty( $this->properties->get( 'old' ) ) ) ) {
+			return;
+		}
 
         $activity = ActivitylogServiceProvider::getActivityModelInstance();
 
