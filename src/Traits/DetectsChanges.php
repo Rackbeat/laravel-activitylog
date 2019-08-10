@@ -2,6 +2,7 @@
 
 namespace Spatie\Activitylog\Traits;
 
+use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\Model;
 use Spatie\Activitylog\Exceptions\CouldNotLogChanges;
 
@@ -16,7 +17,7 @@ trait DetectsChanges
 
                 //temporary hold the original attributes on the model
                 //as we'll need these in the updating event
-                $oldValues = $model->replicate()->setRawAttributes($model->getOriginal());
+                $oldValues = (new static)->setRawAttributes($model->getOriginal());
 
                 $model->oldAttributes = static::logChanges($oldValues);
             });
@@ -92,6 +93,8 @@ trait DetectsChanges
             $nullProperties = array_fill_keys(array_keys($properties['attributes']), null);
 
             $properties['old'] = array_merge($nullProperties, $this->oldAttributes);
+
+            $this->oldAttributes = [];
         }
 
         if ($this->shouldLogOnlyDirty() && isset($properties['old'])) {
@@ -113,11 +116,22 @@ trait DetectsChanges
     public static function logChanges(Model $model): array
     {
         $changes = [];
-        foreach ($model->attributesToBeLogged() as $attribute) {
-            if (str_contains($attribute, '.')) {
+        $attributes = $model->attributesToBeLogged();
+
+        foreach ($attributes as $attribute) {
+            if (Str::contains($attribute, '.')) {
                 $changes += self::getRelatedModelAttributeValue($model, $attribute);
             } else {
-                $changes += collect($model)->only($attribute)->toArray();
+                $changes[$attribute] = $model->getAttribute($attribute);
+
+                if (
+                    in_array($attribute, $model->getDates())
+                    && ! is_null($changes[$attribute])
+                ) {
+                    $changes[$attribute] = $model->serializeDate(
+                        $model->asDateTime($changes[$attribute])
+                    );
+                }
             }
         }
 
@@ -130,7 +144,7 @@ trait DetectsChanges
             throw CouldNotLogChanges::invalidAttribute($attribute);
         }
 
-        list($relatedModelName, $relatedAttribute) = explode('.', $attribute);
+        [$relatedModelName, $relatedAttribute] = explode('.', $attribute);
 
         $relatedModel = $model->$relatedModelName ?? $model->$relatedModelName();
 

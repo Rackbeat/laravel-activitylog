@@ -1,16 +1,41 @@
-<?php
+---
+title: Installation and Setup
+weight: 4
+---
 
+The package can be installed via composer:
+
+``` bash
+composer require spatie/laravel-activitylog
+```
+
+The package will automatically register the service provider.
+
+You can publish the migration with:
+```bash
+php artisan vendor:publish --provider="Spatie\Activitylog\ActivitylogServiceProvider" --tag="migrations"
+```
+
+After the migration has been published you can create the `activity_log` table by running the migrations:
+
+```bash
+php artisan migrate
+```
+
+You can optionally publish the config file with:
+```bash
+php artisan vendor:publish --provider="Spatie\Activitylog\ActivitylogServiceProvider" --tag="config"
+```
+
+This is the contents of the published config file:
+
+```php
 return [
 
     /*
      * If set to false, no activities will be saved to the database.
      */
     'enabled' => env('ACTIVITY_LOGGER_ENABLED', true),
-
-    /*
-     * If set to true, empty properties will not be logged.
-     */
-    'skip_empty' => false,
 
     /*
      * When the clean-command is executed, all recording activities older than
@@ -47,10 +72,5 @@ return [
      * used by the Activity model shipped with this package.
      */
     'table_name' => 'activity_log',
-
-    /*
-     * This is the database connection that will be used by the migration and
-     * the Activity model shipped with this package.
-     */
-    'database_connection' => env('ACTIVITY_LOGGER_DB_CONNECTION', env('DB_CONNECTION', 'mysql')),
 ];
+```

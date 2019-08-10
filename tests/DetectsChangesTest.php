@@ -3,6 +3,7 @@
 namespace Spatie\Activitylog\Test;
 
 use Carbon\Carbon;
+use Illuminate\Support\Arr;
 use Spatie\Activitylog\Models\Activity;
 use Spatie\Activitylog\Test\Models\User;
 use Spatie\Activitylog\Test\Models\Article;
@@ -14,7 +15,7 @@ class DetectsChangesTest extends TestCase
     /** @var \Spatie\Activitylog\Test\Models\Article|\Spatie\Activitylog\Traits\LogsActivity */
     protected $article;
 
-    public function setUp()
+    public function setUp(): void
     {
         parent::setUp();
 
@@ -299,6 +300,7 @@ class DetectsChangesTest extends TestCase
         $expectedChanges = collect([
             'attributes' => [
                 'name' => 'my name',
+                'text' => null,
             ],
         ]);
 
@@ -336,6 +338,7 @@ class DetectsChangesTest extends TestCase
         $expectedChanges = collect([
             'attributes' => [
                 'name' => 'my name',
+                'text' => null,
             ],
         ]);
 
@@ -654,6 +657,285 @@ class DetectsChangesTest extends TestCase
         $article->save();
 
         $this->assertEquals([], $this->getLastActivity()->changes()->toArray());
+    }
+
+    /** @test */
+    public function it_can_use_hidden_as_loggable_attributes()
+    {
+        $articleClass = new class() extends Article {
+            protected $hidden = ['text'];
+            protected $fillable = ['name', 'text'];
+            protected static $logAttributes = ['name', 'text'];
+
+            use LogsActivity;
+        };
+
+        $article = new $articleClass();
+        $article->name = 'my name';
+        $article->text = 'my text';
+        $article->save();
+
+        $expectedChanges = [
+            'attributes' => [
+                'name' => 'my name',
+                'text' => 'my text',
+            ],
+        ];
+
+        $this->assertEquals($expectedChanges, $this->getLastActivity()->changes()->toArray());
+    }
+
+    /** @test */
+    public function it_can_use_overloaded_as_loggable_attributes()
+    {
+        $articleClass = new class() extends Article {
+            protected $fillable = ['name', 'text'];
+            protected static $logAttributes = ['name', 'text', 'description'];
+
+            use LogsActivity;
+
+            public function setDescriptionAttribute($value)
+            {
+                $this->attributes['json'] = json_encode(['description' => $value]);
+            }
+
+            public function getDescriptionAttribute()
+            {
+                return Arr::get(json_decode($this->attributes['json'], true), 'description');
+            }
+        };
+
+        $article = new $articleClass();
+        $article->name = 'my name';
+        $article->text = 'my text';
+        $article->description = 'my description';
+        $article->save();
+
+        $expectedChanges = [
+            'attributes' => [
+                'name' => 'my name',
+                'text' => 'my text',
+                'description' => 'my description',
+            ],
+        ];
+
+        $this->assertEquals($expectedChanges, $this->getLastActivity()->changes()->toArray());
+    }
+
+    /** @test */
+    public function it_can_use_mutated_as_loggable_attributes()
+    {
+        $userClass = new class() extends User {
+            protected $fillable = ['name', 'text'];
+            protected static $logAttributes = ['*'];
+
+            use LogsActivity;
+
+            public function setNameAttribute($value)
+            {
+                $this->attributes['name'] = strtoupper($value);
+            }
+        };
+
+        Carbon::setTestNow(Carbon::create(2017, 1, 1, 12, 0, 0));
+        $user = new $userClass();
+        $user->name = 'my name';
+        $user->text = 'my text';
+        $user->save();
+
+        $expectedChanges = [
+            'attributes' => [
+                'id' => $user->id,
+                'name' => 'MY NAME',
+                'text' => 'my text',
+                'created_at' => '2017-01-01 12:00:00',
+                'updated_at' => '2017-01-01 12:00:00',
+                'deleted_at' => null,
+            ],
+        ];
+
+        $this->assertEquals($expectedChanges, $this->getLastActivity()->changes()->toArray());
+
+        $user->name = 'my name 2';
+        $user->save();
+
+        $expectedChanges = [
+            'old' => [
+                'id' => $user->id,
+                'name' => 'MY NAME',
+                'text' => 'my text',
+                'created_at' => '2017-01-01 12:00:00',
+                'updated_at' => '2017-01-01 12:00:00',
+                'deleted_at' => null,
+            ],
+            'attributes' => [
+                'id' => $user->id,
+                'name' => 'MY NAME 2',
+                'text' => 'my text',
+                'created_at' => '2017-01-01 12:00:00',
+                'updated_at' => '2017-01-01 12:00:00',
+                'deleted_at' => null,
+            ],
+        ];
+
+        $this->assertEquals($expectedChanges, $this->getLastActivity()->changes()->toArray());
+    }
+
+    /** @test */
+    public function it_can_use_accessor_as_loggable_attributes()
+    {
+        $userClass = new class() extends User {
+            protected $fillable = ['name', 'text'];
+            protected static $logAttributes = ['*'];
+
+            use LogsActivity;
+
+            public function getNameAttribute($value)
+            {
+                return strtoupper($value);
+            }
+        };
+
+        Carbon::setTestNow(Carbon::create(2017, 1, 1, 12, 0, 0));
+        $user = new $userClass();
+        $user->name = 'my name';
+        $user->text = 'my text';
+        $user->save();
+
+        $expectedChanges = [
+            'attributes' => [
+                'id' => $user->id,
+                'name' => 'MY NAME',
+                'text' => 'my text',
+                'created_at' => '2017-01-01 12:00:00',
+                'updated_at' => '2017-01-01 12:00:00',
+                'deleted_at' => null,
+            ],
+        ];
+
+        $this->assertEquals($expectedChanges, $this->getLastActivity()->changes()->toArray());
+
+        $user->name = 'my name 2';
+        $user->save();
+
+        $expectedChanges = [
+            'old' => [
+                'id' => $user->id,
+                'name' => 'MY NAME',
+                'text' => 'my text',
+                'created_at' => '2017-01-01 12:00:00',
+                'updated_at' => '2017-01-01 12:00:00',
+                'deleted_at' => null,
+            ],
+            'attributes' => [
+                'id' => $user->id,
+                'name' => 'MY NAME 2',
+                'text' => 'my text',
+                'created_at' => '2017-01-01 12:00:00',
+                'updated_at' => '2017-01-01 12:00:00',
+                'deleted_at' => null,
+            ],
+        ];
+
+        $this->assertEquals($expectedChanges, $this->getLastActivity()->changes()->toArray());
+    }
+
+    /** @test */
+    public function it_can_use_encrypted_as_loggable_attributes()
+    {
+        $userClass = new class() extends User {
+            protected $fillable = ['name', 'text'];
+            protected $encryptable = ['name', 'text'];
+            protected static $logAttributes = ['name', 'text'];
+
+            use LogsActivity;
+
+            public function getAttributeValue($key)
+            {
+                $value = parent::getAttributeValue($key);
+
+                if (in_array($key, $this->encryptable)) {
+                    $value = decrypt($value);
+                }
+
+                return $value;
+            }
+
+            public function setAttribute($key, $value)
+            {
+                if (in_array($key, $this->encryptable)) {
+                    $value = encrypt($value);
+                }
+
+                return parent::setAttribute($key, $value);
+            }
+        };
+
+        Carbon::setTestNow(Carbon::create(2017, 1, 1, 12, 0, 0));
+        $user = new $userClass();
+        $user->name = 'my name';
+        $user->text = 'my text';
+        $user->save();
+
+        $expectedChanges = [
+            'attributes' => [
+                'name' => 'my name',
+                'text' => 'my text',
+            ],
+        ];
+
+        $this->assertEquals($expectedChanges, $this->getLastActivity()->changes()->toArray());
+
+        $user->name = 'my name 2';
+        $user->save();
+
+        $expectedChanges = [
+            'old' => [
+                'name' => 'my name',
+                'text' => 'my text',
+            ],
+            'attributes' => [
+                'name' => 'my name 2',
+                'text' => 'my text',
+            ],
+        ];
+
+        $this->assertEquals($expectedChanges, $this->getLastActivity()->changes()->toArray());
+    }
+
+    /** @test */
+    public function it_can_use_nullable_date_as_loggable_attributes()
+    {
+        $userClass = new class() extends User {
+            protected $fillable = ['name', 'text'];
+            protected static $logAttributes = ['*'];
+            protected $dates = [
+                'created_at',
+                'updated_at',
+                'deleted_at',
+            ];
+
+            use LogsActivity, SoftDeletes;
+        };
+
+        Carbon::setTestNow(Carbon::create(2017, 1, 1, 12, 0, 0));
+        $user = new $userClass();
+        $user->name = 'my name';
+        $user->text = 'my text';
+        $user->save();
+
+        $expectedChanges = [
+            'attributes' => [
+                'id' => $user->getKey(),
+                'name' => 'my name',
+                'text' => 'my text',
+                'created_at' => '2017-01-01 12:00:00',
+                'updated_at' => '2017-01-01 12:00:00',
+                'deleted_at' => null,
+            ],
+        ];
+
+        $this->assertEquals($expectedChanges, $this->getLastActivity()->changes()->toArray());
     }
 
     protected function createArticle(): Article
