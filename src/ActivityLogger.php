@@ -40,7 +40,7 @@ class ActivityLogger
 
         $this->defaultLogName = $config['activitylog']['default_log_name'];
 
-		$this->skipEmpty = $config['activitylog']['skip_empty'] ?? true;
+		$this->skipEmpty = $config['activitylog']['skip_empty'] ?? false;
 
         $this->logStatus = $logStatus;
     }
