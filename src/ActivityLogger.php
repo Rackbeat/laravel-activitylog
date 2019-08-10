@@ -135,7 +135,7 @@ class ActivityLogger
             return;
         }
         
-        if ( $this->skipEmpty && ( empty( $this->properties->get( 'attributes' ) ) || empty( $this->properties->get( 'old' ) ) ) ) {
+        if ( $this->skipEmpty && ( empty( $this->getActivity()->properties->get( 'attributes' ) ) || empty( $this->getActivity()->properties->get( 'old' ) ) ) ) {
 			return;
 		}
 
