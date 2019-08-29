@@ -2,209 +2,192 @@
 
 namespace Spatie\Activitylog;
 
-use Spatie\String\Str;
-use Illuminate\Support\Arr;
 use Illuminate\Auth\AuthManager;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Traits\Macroable;
 use Illuminate\Contracts\Config\Repository;
-use Spatie\Activitylog\Exceptions\CouldNotLogActivity;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Traits\Macroable;
 use Spatie\Activitylog\Contracts\Activity as ActivityContract;
+use Spatie\Activitylog\Exceptions\CouldNotLogActivity;
+use Spatie\String\Str;
 
 class ActivityLogger
 {
-    use Macroable;
+	use Macroable;
 
-    /** @var \Illuminate\Auth\AuthManager */
-    protected $auth;
+	/** @var \Illuminate\Auth\AuthManager */
+	protected $auth;
 
-    protected $defaultLogName = '';
+	protected $defaultLogName = '';
 
-    /** @var string */
-    protected $authDriver;
+	/** @var string */
+	protected $authDriver;
 
-    /** @var \Spatie\Activitylog\ActivityLogStatus */
-    protected $logStatus;
+	/** @var \Spatie\Activitylog\ActivityLogStatus */
+	protected $logStatus;
 
 	/** @var bool */
 	protected $skipEmpty;
 
-    /** @var \Spatie\Activitylog\Contracts\Activity */
-    protected $activity;
+	/** @var \Spatie\Activitylog\Contracts\Activity */
+	protected $activity;
 
-    public function __construct(AuthManager $auth, Repository $config, ActivityLogStatus $logStatus)
-    {
-        $this->auth = $auth;
+	public function __construct( AuthManager $auth, Repository $config, ActivityLogStatus $logStatus ) {
+		$this->auth = $auth;
 
-        $this->authDriver = $config['activitylog']['default_auth_driver'] ?? $auth->getDefaultDriver();
+		$this->authDriver = $config['activitylog']['default_auth_driver'] ?? $auth->getDefaultDriver();
 
-        $this->defaultLogName = $config['activitylog']['default_log_name'];
+		$this->defaultLogName = $config['activitylog']['default_log_name'];
 
 		$this->skipEmpty = $config['activitylog']['skip_empty'] ?? false;
 
-        $this->logStatus = $logStatus;
-    }
+		$this->logStatus = $logStatus;
+	}
 
-    public function setLogStatus(ActivityLogStatus $logStatus)
-    {
-        $this->logStatus = $logStatus;
+	public function setLogStatus( ActivityLogStatus $logStatus ) {
+		$this->logStatus = $logStatus;
 
-        return $this;
-    }
+		return $this;
+	}
 
-    public function performedOn(Model $model)
-    {
-        $this->getActivity()->subject()->associate($model);
+	public function performedOn( Model $model ) {
+		$this->getActivity()->subject()->associate( $model );
 
-        return $this;
-    }
+		return $this;
+	}
 
-    public function on(Model $model)
-    {
-        return $this->performedOn($model);
-    }
+	public function on( Model $model ) {
+		return $this->performedOn( $model );
+	}
 
-    public function causedBy($modelOrId)
-    {
-        if ($modelOrId === null) {
-            return $this;
-        }
+	public function causedBy( $modelOrId ) {
+		if ( $modelOrId === null ) {
+			return $this;
+		}
 
-        $model = $this->normalizeCauser($modelOrId);
+		$model = $this->normalizeCauser( $modelOrId );
 
-        $this->getActivity()->causer()->associate($model);
+		$this->getActivity()->causer()->associate( $model );
 
-        return $this;
-    }
+		return $this;
+	}
 
-    public function by($modelOrId)
-    {
-        return $this->causedBy($modelOrId);
-    }
+	public function by( $modelOrId ) {
+		return $this->causedBy( $modelOrId );
+	}
 
-    public function withProperties($properties)
-    {
-        $this->getActivity()->properties = collect($properties);
+	public function withProperties( $properties ) {
+		$this->getActivity()->properties = collect( $properties );
 
-        return $this;
-    }
+		return $this;
+	}
 
-    public function withProperty(string $key, $value)
-    {
-        $this->getActivity()->properties = $this->getActivity()->properties->put($key, $value);
+	public function withProperty( string $key, $value ) {
+		$this->getActivity()->properties = $this->getActivity()->properties->put( $key, $value );
 
-        return $this;
-    }
+		return $this;
+	}
 
-    public function useLog(string $logName)
-    {
-        $this->getActivity()->log_name = $logName;
+	public function useLog( string $logName ) {
+		$this->getActivity()->log_name = $logName;
 
-        return $this;
-    }
+		return $this;
+	}
 
-    public function inLog(string $logName)
-    {
-        return $this->useLog($logName);
-    }
+	public function inLog( string $logName ) {
+		return $this->useLog( $logName );
+	}
 
-    public function tap(callable $callback, string $eventName = null)
-    {
-        call_user_func($callback, $this->getActivity(), $eventName);
+	public function tap( callable $callback, string $eventName = null ) {
+		call_user_func( $callback, $this->getActivity(), $eventName );
 
-        return $this;
-    }
+		return $this;
+	}
 
-    public function enableLogging()
-    {
-        $this->logStatus->enable();
+	public function enableLogging() {
+		$this->logStatus->enable();
 
-        return $this;
-    }
+		return $this;
+	}
 
-    public function disableLogging()
-    {
-        $this->logStatus->disable();
+	public function disableLogging() {
+		$this->logStatus->disable();
 
-        return $this;
-    }
+		return $this;
+	}
 
-    public function log(string $description)
-    {
-        if ($this->logStatus->disabled()) {
-            return;
-        }
-        
-        if ( $this->skipEmpty && ( empty( $this->getActivity()->properties->get( 'attributes' ) ) || empty( $this->getActivity()->properties->get( 'old' ) ) ) ) {
+	public function log( string $description ) {
+		if ( $this->logStatus->disabled() ) {
 			return;
 		}
 
-        $activity = $this->activity;
+		if ( $this->skipEmpty && empty( array_merge( array_wrap( $this->getActivity()->properties->get( 'attributes' ), array_wrap( $this->getActivity()->properties->get( 'old' ) ) ) ) ) ) {
+			return;
+		}
 
-        $activity->description = $this->replacePlaceholders(
-            $activity->description ?? $description,
-            $activity
-        );
+		$activity = $this->activity;
 
-        $activity->save();
+		$activity->description = $this->replacePlaceholders(
+			$activity->description ?? $description,
+			$activity
+		);
 
-        $this->activity = null;
+		$activity->save();
 
-        return $activity;
-    }
+		$this->activity = null;
 
-    protected function normalizeCauser($modelOrId): Model
-    {
-        if ($modelOrId instanceof Model) {
-            return $modelOrId;
-        }
+		return $activity;
+	}
 
-        $guard = $this->auth->guard($this->authDriver);
-        $provider = method_exists($guard, 'getProvider') ? $guard->getProvider() : null;
-        $model = method_exists($provider, 'retrieveById') ? $provider->retrieveById($modelOrId) : null;
+	protected function normalizeCauser( $modelOrId ): Model {
+		if ( $modelOrId instanceof Model ) {
+			return $modelOrId;
+		}
 
-        if ($model instanceof Model) {
-            return $model;
-        }
+		$guard    = $this->auth->guard( $this->authDriver );
+		$provider = method_exists( $guard, 'getProvider' ) ? $guard->getProvider() : null;
+		$model    = method_exists( $provider, 'retrieveById' ) ? $provider->retrieveById( $modelOrId ) : null;
 
-        throw CouldNotLogActivity::couldNotDetermineUser($modelOrId);
-    }
+		if ( $model instanceof Model ) {
+			return $model;
+		}
 
-    protected function replacePlaceholders(string $description, ActivityContract $activity): string
-    {
-        return preg_replace_callback('/:[a-z0-9._-]+/i', function ($match) use ($activity) {
-            $match = $match[0];
+		throw CouldNotLogActivity::couldNotDetermineUser( $modelOrId );
+	}
 
-            $attribute = (string) (new Str($match))->between(':', '.');
+	protected function replacePlaceholders( string $description, ActivityContract $activity ): string {
+		return preg_replace_callback( '/:[a-z0-9._-]+/i', function ( $match ) use ( $activity ) {
+			$match = $match[0];
 
-            if (! in_array($attribute, ['subject', 'causer', 'properties'])) {
-                return $match;
-            }
+			$attribute = (string) ( new Str( $match ) )->between( ':', '.' );
 
-            $propertyName = substr($match, strpos($match, '.') + 1);
+			if ( ! in_array( $attribute, [ 'subject', 'causer', 'properties' ] ) ) {
+				return $match;
+			}
 
-            $attributeValue = $activity->$attribute;
+			$propertyName = substr( $match, strpos( $match, '.' ) + 1 );
 
-            if (is_null($attributeValue)) {
-                return $match;
-            }
+			$attributeValue = $activity->$attribute;
 
-            $attributeValue = $attributeValue->toArray();
+			if ( is_null( $attributeValue ) ) {
+				return $match;
+			}
 
-            return Arr::get($attributeValue, $propertyName, $match);
-        }, $description);
-    }
+			$attributeValue = $attributeValue->toArray();
 
-    protected function getActivity(): ActivityContract
-    {
-        if (! $this->activity instanceof ActivityContract) {
-            $this->activity = ActivitylogServiceProvider::getActivityModelInstance();
-            $this
-                ->useLog($this->defaultLogName)
-                ->withProperties([])
-                ->causedBy($this->auth->guard($this->authDriver)->user());
-        }
+			return Arr::get( $attributeValue, $propertyName, $match );
+		}, $description );
+	}
 
-        return $this->activity;
-    }
+	protected function getActivity(): ActivityContract {
+		if ( ! $this->activity instanceof ActivityContract ) {
+			$this->activity = ActivitylogServiceProvider::getActivityModelInstance();
+			$this
+				->useLog( $this->defaultLogName )
+				->withProperties( [] )
+				->causedBy( $this->auth->guard( $this->authDriver )->user() );
+		}
+
+		return $this->activity;
+	}
 }
